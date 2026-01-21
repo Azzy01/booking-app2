@@ -1,0 +1,15 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Slot {
+  id        String   @id @default(cuid())
+  pitch     String
+  startsAt  DateTime
+  endsAt    DateTime
+  createdAt DateTime @default(now())
+}
