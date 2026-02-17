@@ -6,10 +6,168 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum ClubStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum UserRole {
+  TECH_ADMIN
+  HOST_ADMIN
+  CLIENT
+  SYSTEM
+}
+
+enum HoldStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  CONFIRMED
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum SeatType {
+  PC
+  CONSOLE
+  VR
+  OTHER
+}
+
+model Club {
+  id                   String     @id @default(cuid())
+  name                 String
+  timezone             String     @default("UTC")
+  status               ClubStatus @default(ACTIVE)
+  labelUniquenessScope String     @default("CLUB")
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  maps                 ClubMap[]
+  slots                Slot[]
+  holds                Hold[]
+  bookings             Booking[]
+  seatIndexes          SeatIndex[]
+}
+
 model Slot {
-  id        String   @id @default(cuid())
-  pitch     String
+  id        String    @id @default(cuid())
+  clubId    String
+  club      Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  label     String
   startsAt  DateTime
   endsAt    DateTime
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  holds     Hold[]
+  bookings  Booking[]
+
+  @@index([clubId, startsAt])
+  @@unique([clubId, label, startsAt])
+}
+
+model ClubMap {
+  id        String       @id @default(cuid())
+  clubId    String       @unique
+  club      Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  draftJson Json
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  versions  MapVersion[]
+}
+
+model MapVersion {
+  id            String      @id @default(cuid())
+  mapId         String
+  map           ClubMap     @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  publishedJson Json
+  publishedAt   DateTime    @default(now())
+  publishedBy   String?
+  seatIndexes   SeatIndex[]
+  bookings      Booking[]
+
+  @@unique([mapId, versionNumber])
+  @@index([mapId, publishedAt])
+}
+
+model SeatIndex {
+  id           String     @id @default(cuid())
+  clubId       String
+  club         Club       @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  mapVersionId String
+  mapVersion   MapVersion @relation(fields: [mapVersionId], references: [id], onDelete: Cascade)
+  seatId       String
+  floorId      String
+  roomId       String?
+  label        String
+  segmentId    String
+  seatType     SeatType   @default(PC)
+  geometry     Json
+  meta         Json?
+  createdAt    DateTime   @default(now())
+
+  @@unique([mapVersionId, seatId])
+  @@index([clubId, floorId])
+  @@index([clubId, mapVersionId])
+  @@index([clubId, seatId])
+  @@index([clubId, label])
+}
+
+model Hold {
+  id              String     @id @default(cuid())
+  clubId          String
+  club            Club       @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  slotId          String
+  slot            Slot       @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  seatId          String
+  status          HoldStatus @default(ACTIVE)
+  activeKey       String?    @default("ACTIVE")
+  expiresAt       DateTime
+  createdByRole   UserRole   @default(CLIENT)
+  createdByUserId String?
+  customerContext Json?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  booking         Booking?
+
+  @@index([clubId, slotId, seatId])
+  @@index([status, expiresAt])
+  @@unique([clubId, slotId, seatId, activeKey])
+}
+
+model Booking {
+  id            String        @id @default(cuid())
+  clubId        String
+  club          Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  slotId        String
+  slot          Slot          @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  seatId        String
+  activeKey     String?       @default("ACTIVE")
+  holdId        String?       @unique
+  hold          Hold?         @relation(fields: [holdId], references: [id], onDelete: SetNull)
+  mapVersionId  String?
+  mapVersion    MapVersion?   @relation(fields: [mapVersionId], references: [id], onDelete: SetNull)
+  status        BookingStatus @default(CONFIRMED)
+  paymentStatus PaymentStatus @default(UNPAID)
+  customerId    String?
+  customerName  String?
+  price         Float?
+  notes         String?
+  createdByRole UserRole      @default(CLIENT)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([clubId, slotId, seatId, activeKey])
+  @@index([clubId, slotId])
 }
